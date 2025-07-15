@@ -17,3 +17,143 @@ jobs:
         run: |
           ls ${{ github.workspace }}
       - run: echo "🍏 This job's status is ${{ job.status }}."
+
+
+| Layer             | Free Tool                                        | Purpose                         |
+| ----------------- | ------------------------------------------------ | ------------------------------- |
+| Brain             | OpenAI GPT-3.5 via OpenRouter (200 req/min free) | Write scripts, articles, titles |
+| Image             | Bing Image Creator + Canva API                   | Thumbnails, carousels           |
+| Video             | Pexels stock + MoviePy (Python)                  | 3-min faceless repair videos    |
+| CMS               | WordPress REST API                               | Auto-post articles              |
+| Tube              | YouTube Data API v3                              | Auto-upload videos              |
+| Payments – Local  | Beyonic API (MTN/Airtel)                         | Mobile Money checkout           |
+| Payments – Global | Binance Pay API (BUSD/BNB)                       | Crypto checkout                 |
+| Scheduler         | GitHub Actions (cron)                            | Runs daily at 06:30 EAT         |
+
+| New Value                                                         
+| ----------------- | -----------------------------------------------------------------------------------|
+| Watemlifts        |                                                                                    |
+| watemlifts.com    | **watemlifts.wordpress.com** (or watemlifts.com when you upgrade)                  |
+| @watemlifts       | **@watemlifts** (already exists)                                                   |
+| tag-line          | “30 % less downtime • 15 % less energy by Watemlifts”                              |
+| Google Sheet name | “Watemlifts\_Content\_Calendar”                                                    |
+| GitHub repo       | **watemlifts-bot**                                                                 |
+| WhatsApp group    | **“Watemlifts FM Circle”**                                                         |
+| Telegram channel  | **@WatemliftsDaily**                                                               |
+
+OPENAI_KEY=sk-xxx
+WP_USER=admin
+WP_APP_PASS=abcd 1234  (generated in WP → Users → Application Passwords)
+YT_REFRESH_TOKEN=xxx
+BINANCE_API_KEY=xxx
+BINANCE_SECRET=xxx
+BEYONIC_TOKEN=xxx
+
+name: daily-content
+on:
+  schedule:
+    - cron: "30 3 * * *"   # 06:30 EAT
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with: {python-version: '3.11'}
+      - run: pip install -r requirements.txt
+      - run: python main.py
+
+openai==1.3.0
+requests
+moviepy==1.0.3
+gspread
+oauth2client
+
+import os, datetime, openai, requests, json, random, gspread
+from moviepy.editor import *
+from oauth2client.service_account import ServiceAccountCredentials
+
+# ---------- 1. fetch prompt ----------
+gc = gspread.service_account_from_dict(json.loads(os.getenv("GOOGLE_SA")))
+sheet = gc.open_by_url("https://docs.google.com/spreadsheets/d/xxx").sheet1
+row = sheet.get_all_records()[datetime.date.today().day % len(sheet.get_all_records())]
+pillar = row["pillar"]
+keyword = row["keyword"]
+price_ugx = row["price_ugx"]
+price_busd = row["price_busd"]
+
+prompt = f"""
+Write a 350-word Watemlifts elevator maintenance blog post about '{keyword}'.
+Include 3 actionable steps and a CTA to buy the detailed checklist.
+Tone: practical, friendly.
+"""
+
+openai.api_key = os.getenv("OPENAI_KEY")
+blog_body = openai.ChatCompletion.create(
+  model="gpt-3.5-turbo",
+  messages=[{"role": "user", "content": prompt}]
+)["choices"][0]["message"]["content"]
+
+# ---------- 2. WordPress post ----------
+wp_url = "https://watemlifts.com/wp-json/wp/v2/posts"
+auth = (os.getenv("WP_USER"), os.getenv("WP_APP_PASS"))
+post = {
+  "title": f"{keyword.title()} – Daily Fix #{datetime.date.today().day}",
+  "content": blog_body + f"<p><a href='https://pay.watemlifts.com/{keyword.replace(' ','-')}' style='background:#FFD100;color:#000;padding:8px 16px;border-radius:4px;'>Buy Detailed Checklist – UGX {price_ugx} or BUSD {price_busd}</a></p>",
+  "status": "publish",
+  "categories": [3]  # pre-create "Daily Hacks"
+}
+requests.post(wp_url, json=post, auth=auth)
+
+# ---------- 3. YouTube upload ----------
+script = openai.ChatCompletion.create(
+  model="gpt-3.5-turbo",
+  messages=[{"role":"user","content":f"Write a 90-word YouTube video script for '{keyword}' ending with CTA to buy checklist for {price_ugx} UGX via mobile money."}]
+)["choices"][0]["message"]["content"]
+audio = openai.Audio.create(
+  input=script, model="tts-1", voice="alloy"
+)
+with open("voice.mp3","wb") as f: f.write(audio["data"])
+
+# simple faceless video
+clip = ImageClip("thumbnail.jpg", duration=60).set_audio(AudioFileClip("voice.mp3"))
+clip.write_videofile("video.mp4", fps=24)
+
+# upload via YouTube Data API (refresh token already in secrets)
+# (shortened – full oauth code in repo)
+
+| Task                                               | Time   | Tool          |
+| -------------------------------------------------- | ------ | ------------- |
+| Refill Google Sheet with next 30 keywords & prices | 10 min | Google Sheets |
+| Review / tweak auto-generated thumbnails           | 5 min  | Canva         |
+| Approve payouts in Beyonic dashboard               | 2 min  | Phone         |
+
+git clone https://github.com/<you>/watemlifts-bot.git
+cd watemlifts-bot
+sed -i 's/Watemlifts/Watemlifts/g' *.py *.md *.yml
+sed -i 's/watemlifts/watemlifts/g' *.py *.yml
+git add .
+git commit -m "rebrand to Watemlifts"
+git push
+
+| Need                         | Free Tool                                               | How to Use                                              |
+| ---------------------------- | ------------------------------------------------------- | ------------------------------------------------------- |
+| Thumbnails & social graphics | **Photopea.com** (browser-based, Photoshop clone)       | Open PSD/Templates → replace text/logo → export PNG/JPG |
+| Vector Logo & simple icons   | **Inkscape.org** (desktop) or **BoxySVG.com** (browser) | SVG → PNG at 350×350 for thumbnails                     |
+| Bulk graphics                | **GIMP** + free templates (e.g., Pixabay PSDs)          | Same workflow as above                                  |
+
+  from PIL import Image
+
+# path inside the repo
+thumbnail_path = "watem_thumbnail.png"
+# open and overlay the day number if desired
+img = Image.open(thumbnail_path)
+# … your MoviePy / PIL code …
+
+mv "WATEM HACK 123..png" watem_thumbnail.png
+          
+
+
+
